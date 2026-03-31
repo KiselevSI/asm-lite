@@ -5,19 +5,15 @@ nextflow.enable.dsl = 2
 if (!params.input) {
     error "ERROR: --input samplesheet.csv is required"
 }
-
-if (params.workflow == 'bacteria') {
-    include { BACTERIA } from './workflows/bacteria'
-} else if (params.workflow == 'phages') {
-    include { PHAGES } from './workflows/phages'
-} else {
+if (!(params.workflow in ['bacteria', 'phages'])) {
     error "ERROR: --workflow must be 'bacteria' or 'phages', got: '${params.workflow}'"
 }
+if (params.workflow == 'phages' && !params.pharokka_db) {
+    error "ERROR: --pharokka_db is required for phages workflow"
+}
+
+include { ASMLITE } from './workflows/asmlite'
 
 workflow {
-    if (params.workflow == 'bacteria') {
-        BACTERIA()
-    } else {
-        PHAGES()
-    }
+    ASMLITE()
 }
