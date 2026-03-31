@@ -12,7 +12,6 @@ workflow MAPPING {
     references  // path to references.csv
 
     main:
-    ch_versions = Channel.empty()
 
     // Parse references CSV
     ch_refs = channel
@@ -25,7 +24,6 @@ workflow MAPPING {
 
     // Index each reference
     BWA_INDEX_REF(ch_refs)
-    ch_versions = ch_versions.mix(BWA_INDEX_REF.out.versions_bwa)
 
     // Create faidx for each reference (needed by picard)
     ch_faidx_input = ch_refs.map { ref_meta, fasta -> [ref_meta, fasta, []] }
@@ -58,7 +56,6 @@ workflow MAPPING {
         ch_for_bwa.map { meta, reads_files, ref_meta, index, ref_fasta -> [ref_meta, ref_fasta] },
         true  // sort BAM
     )
-    ch_versions = ch_versions.mix(BWA_MEM_REF.out.versions_bwa)
 
     // Mark duplicates
     // Get fai from SAMTOOLS_FAIDX
@@ -77,15 +74,13 @@ workflow MAPPING {
         ch_dedup_with_ref.map { meta, bam, ref_meta, fasta, fai -> [meta, bam] },
         ch_dedup_with_ref.map { meta, bam, ref_meta, fasta, fai -> [ref_meta, fasta, fai] }
     )
-    ch_versions = ch_versions.mix(PICARD_MARKDUPLICATES.out.versions_picard)
 
     // Index deduped BAM
     SAMTOOLS_INDEX_REF(PICARD_MARKDUPLICATES.out.bam)
-    ch_versions = ch_versions.mix(SAMTOOLS_INDEX_REF.out.versions_samtools)
 
     // Join BAM + BAI
     ch_bam_bai = PICARD_MARKDUPLICATES.out.bam
-        .join(SAMTOOLS_INDEX_REF.out.bai)
+        .join(SAMTOOLS_INDEX_REF.out.index)
         .map { meta, bam, bai -> [meta, bam, bai] }
 
     // BAM + BAI + ref fasta + fai for variant calling
@@ -98,5 +93,4 @@ workflow MAPPING {
     emit:
     bam_bai     = ch_bam_bai        // tuple(meta[+ref_name], bam, bai)
     bam_bai_ref = ch_bam_bai_ref    // tuple(meta[+ref_name], bam, bai, ref_fasta, ref_fai)
-    versions    = ch_versions
 }

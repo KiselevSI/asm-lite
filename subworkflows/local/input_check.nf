@@ -5,7 +5,7 @@ workflow INPUT_CHECK {
     samplesheet // path to CSV
 
     main:
-    reads = Channel
+    reads = channel
         .fromPath(samplesheet)
         .splitCsv(header: true, sep: ',')
         .map { row ->

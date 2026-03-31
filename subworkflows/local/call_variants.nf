@@ -11,7 +11,6 @@ workflow CALL_VARIANTS {
     bam_bai_ref  // tuple(meta[+ref_name], bam, bai, ref_fasta, ref_fai)
 
     main:
-    ch_versions = Channel.empty()
 
     // 1. mpileup + call (combined in nf-core module)
     // BCFTOOLS_MPILEUP(tuple(meta, bam, intervals_mpileup, intervals_call), tuple(meta2, fasta, fai), save_mpileup)
@@ -23,7 +22,6 @@ workflow CALL_VARIANTS {
     }
 
     BCFTOOLS_MPILEUP(ch_mpileup_input, ch_mpileup_ref, false)
-    ch_versions = ch_versions.mix(BCFTOOLS_MPILEUP.out.versions_bcftools)
 
     // 2. norm
     // BCFTOOLS_NORM(tuple(meta, vcf, tbi), tuple(meta2, fasta))
@@ -35,17 +33,14 @@ workflow CALL_VARIANTS {
     }
 
     BCFTOOLS_NORM(ch_norm_input, ch_norm_ref)
-    ch_versions = ch_versions.mix(BCFTOOLS_NORM.out.versions_bcftools)
 
     // 3. view (filter: QUAL>=20 && FMT/DP>=10 via ext.args in modules.config)
     // BCFTOOLS_VIEW(tuple(meta, vcf, index), regions, targets, samples)
     ch_view_input = BCFTOOLS_NORM.out.vcf.map { meta, vcf -> [meta, vcf, []] }
     BCFTOOLS_VIEW(ch_view_input, [], [], [])
-    ch_versions = ch_versions.mix(BCFTOOLS_VIEW.out.versions_bcftools)
 
     // 4. index
     BCFTOOLS_INDEX(BCFTOOLS_VIEW.out.vcf)
-    ch_versions = ch_versions.mix(BCFTOOLS_INDEX.out.versions_bcftools)
 
     // 5. stats
     // BCFTOOLS_STATS(tuple(meta, vcf, tbi), tuple(meta2,regions), tuple(meta3,targets), tuple(meta4,samples), tuple(meta5,exons), tuple(meta6,fasta))
@@ -53,11 +48,9 @@ workflow CALL_VARIANTS {
         .join(BCFTOOLS_INDEX.out.csi)
         .map { meta, vcf, csi -> [meta, vcf, csi] }
     BCFTOOLS_STATS(ch_stats_input, [[],[]], [[],[]], [[],[]], [[],[]], [[],[]])
-    ch_versions = ch_versions.mix(BCFTOOLS_STATS.out.versions_bcftools)
 
     emit:
     vcf      = BCFTOOLS_VIEW.out.vcf       // tuple(meta, vcf.gz)
     index    = BCFTOOLS_INDEX.out.csi       // tuple(meta, vcf.gz.csi)
     stats    = BCFTOOLS_STATS.out.stats     // tuple(meta, stats.txt)
-    versions = ch_versions
 }
