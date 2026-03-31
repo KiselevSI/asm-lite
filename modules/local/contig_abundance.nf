@@ -5,7 +5,7 @@ process CONTIG_ABUNDANCE {
     conda "bioconda::samtools=1.21"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
         'https://depot.galaxyproject.org/singularity/samtools:1.21--h50ea8bc_0' :
-        'biocontainers/samtools:1.21--h50ea8bc_0' }"
+        'community.wave.seqera.io/library/htslib_samtools:1.23.1--5b6bb4ede7e612e5' }"
 
     input:
     tuple val(meta), path(bam), path(bai)
