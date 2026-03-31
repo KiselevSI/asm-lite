@@ -1,0 +1,40 @@
+
+picard_config:                       # ↓ это у вас уже работает
+  general_stats_target_coverage: [1, 5, 10, 30, 50]
+
+
+
+# 1. Не превращать большие таблицы в violin-плот
+max_table_rows: 100000          # или любое число больше вашего N образцов
+
+extra_fn_clean_exts:
+  - "_polish"
+
+# 2. (MultiQC ≥ 1.27) Никогда не отключать кнопку "Configure Columns"
+table_disable_cols_button_num_columns: 0   # или большое число
+
+table_columns_visible:
+  picard_wgsmetrics-MEAN_COVERAGE: True
+  picard_wgsmetrics-SD_COVERAGE: True
+  samtools_stats-error_rate: False
+  samtools_stats-non_primary_alignments: False
+  samtools_stats-reads_properly_paired_percent: False
+  samtools_stats-raw_total_sequences: False
+  samtools_stats-reads_mapped: False
+  samtools_stats-reads_mapped_percent: False
+  samtools_flagstat-mapped_passed: False
+  samtools_flagstat-mapped_passed_pct: True
+
+
+custom_content:
+  quast_extra:
+    section_name: "QUAST (extra metrics)"
+    plot_type: table
+    file_format: tsv
+    files: ["multiqc_quast.txt"]
+    headers: true
+    transpose: false
+    uniq_key: "Sample"
+    only_columns: [ "Sample", "# contigs", "GC (%)", "# misassemblies",
+                    "# mismatches per 100 kbp", "# indels per 100 kbp",
+                    "Duplication ratio", "NG50", "NGA50" ]
