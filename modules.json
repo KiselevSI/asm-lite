@@ -65,6 +65,11 @@
             "git_sha": "79b36b51048048374b642289bfe9e591ef56fe05",
             "installed_by": ["modules"]
           },
+          "gunzip": {
+            "branch": "master",
+            "git_sha": "96c57dfd98a0641886a67bd449fe33ee2ec0e374",
+            "installed_by": ["modules"]
+          },
           "kraken2/kraken2": {
             "branch": "master",
             "git_sha": "71a39f3598935d64ffd65f0960e4d2d4a42ab778",
@@ -103,6 +108,11 @@
           "quast": {
             "branch": "master",
             "git_sha": "c3ef6747c66c2d6217d067fd2dfb3412ff46bc3e",
+            "installed_by": ["modules"]
+          },
+          "samtools/faidx": {
+            "branch": "master",
+            "git_sha": "156feda0cb6589cd29c04902004fa3b53bc00205",
             "installed_by": ["modules"]
           },
           "samtools/flagstat": {
