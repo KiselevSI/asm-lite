@@ -9,6 +9,10 @@ max_table_rows: 100000          # или любое число больше ва
 
 extra_fn_clean_exts:
   - "_polish"
+  - type: remove
+    pattern: "_1"
+  - type: remove
+    pattern: "_2"
 
 # 2. (MultiQC ≥ 1.27) Никогда не отключать кнопку "Configure Columns"
 table_disable_cols_button_num_columns: 0   # или большое число

@@ -1,4 +1,4 @@
-// workflows/asmlite.nf — unified workflow for bacteria and phages
+// workflows/asmlite.nf — unified workflow
 
 include { INPUT_CHECK       } from '../subworkflows/local/input_check'
 include { FASTP             } from '../modules/nf-core/fastp/main'
@@ -46,30 +46,34 @@ workflow ASMLITE {
             .join(KRAKEN2_KRAKEN2.out.report)
         BRACKEN_ADD_UNCLASSIFIED(ch_bracken_kraken)
 
-        ch_all_bracken = BRACKEN_BRACKEN.out.reports.map { meta, report -> report }.collect()
+        ch_all_bracken = BRACKEN_ADD_UNCLASSIFIED.out.tsv.map { meta, tsv -> tsv }.collect()
         BRACKEN_COMBINEBRACKENOUTPUTS(
-            [[id: 'all_samples'], ch_all_bracken]
+            ch_all_bracken.map { files -> [[id: 'all_samples'], files] }
         )
     }
 
     // 5. Assembly + map to self
-    PREPARE_ASSEMBLY(ch_trimmed)
+    if (!params.skip_assembly) {
+        PREPARE_ASSEMBLY(ch_trimmed)
 
-    // 6. Annotate — choose by --workflow
-    if (params.workflow == 'phages') {
-        ch_pharokka_db = channel.value(file(params.pharokka_db, checkIfExists: true))
-        PHAROKKA_PHAROKKA(PREPARE_ASSEMBLY.out.scaffolds, ch_pharokka_db)
-    } else {
-        PROKKA(PREPARE_ASSEMBLY.out.scaffolds, [], [])
+        // 6. Annotate
+        if (params.pharokka) {
+            ch_pharokka_db = channel.value(file(params.pharokka_db, checkIfExists: true))
+            PHAROKKA_PHAROKKA(PREPARE_ASSEMBLY.out.scaffolds, ch_pharokka_db)
+        } else {
+            PROKKA(PREPARE_ASSEMBLY.out.scaffolds, [], [])
+        }
+
+        // 7. Stats on assembly
+        if (!params.skip_stats) {
+            STATS(PREPARE_ASSEMBLY.out.bam_bai, PREPARE_ASSEMBLY.out.scaffolds)
+            ch_multiqc = ch_multiqc.mix(STATS.out.wgs_metrics.map { meta, f -> f })
+            ch_multiqc = ch_multiqc.mix(STATS.out.alignment_metrics.map { meta, f -> f })
+            ch_multiqc = ch_multiqc.mix(STATS.out.samtools_stats.map { meta, f -> f })
+            ch_multiqc = ch_multiqc.mix(STATS.out.samtools_flagstat.map { meta, f -> f })
+            ch_multiqc = ch_multiqc.mix(STATS.out.quast_results.map { meta, d -> d })
+        }
     }
-
-    // 7. Stats on assembly
-    STATS(PREPARE_ASSEMBLY.out.bam_bai, PREPARE_ASSEMBLY.out.scaffolds)
-    ch_multiqc = ch_multiqc.mix(STATS.out.wgs_metrics.map { meta, f -> f })
-    ch_multiqc = ch_multiqc.mix(STATS.out.alignment_metrics.map { meta, f -> f })
-    ch_multiqc = ch_multiqc.mix(STATS.out.samtools_stats.map { meta, f -> f })
-    ch_multiqc = ch_multiqc.mix(STATS.out.samtools_flagstat.map { meta, f -> f })
-    ch_multiqc = ch_multiqc.mix(STATS.out.quast_results.map { meta, d -> d })
 
     // 8. Map to references + variant calling
     if (!params.skip_variants && params.references) {
@@ -80,9 +84,12 @@ workflow ASMLITE {
     }
 
     // 9. MultiQC
-    MULTIQC(
-        ch_multiqc.collect().map { files ->
-            [[id: 'multiqc'], files, [], [], [], []]
-        }
-    )
+    if (!params.skip_stats) {
+        def mqc_config = params.multiqc_config ? file(params.multiqc_config) : []
+        MULTIQC(
+            ch_multiqc.collect().map { files ->
+                [[id: 'multiqc'], files, mqc_config, [], [], []]
+            }
+        )
+    }
 }

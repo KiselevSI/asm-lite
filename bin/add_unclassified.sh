@@ -34,4 +34,4 @@ FRAC=$(awk "BEGIN { printf \"%.6f\", ${UNCLASSIFIED}/${TOTAL} }")
 
 # Copy bracken output and append unclassified row
 cp "$BRACKEN_TSV" "$OUTPUT"
-echo -e "Unclassified\t0\t0\t${UNCLASSIFIED}\t${UNCLASSIFIED}\t${FRAC}" >> "$OUTPUT"
+echo -e "Unclassified\t0\tS\t${UNCLASSIFIED}\t0\t${UNCLASSIFIED}\t${FRAC}" >> "$OUTPUT"

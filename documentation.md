@@ -42,22 +42,31 @@ nf-core-asmlite/
 ## Usage
 
 ```bash
-# Bacteria
+# Bacteria or other non-phage assemblies (Prokka annotation by default)
 nextflow run main.nf -profile docker \
-  --workflow bacteria \
   --input samplesheet.csv \
   --references references.csv \
   --kraken2_db /path/to/kraken2_db \
   --outdir results
 
-# Phages
+# Phages (switch annotation to Pharokka)
 nextflow run main.nf -profile docker \
-  --workflow phages \
   --input samplesheet.csv \
   --references references.csv \
+  --pharokka \
   --pharokka_db /path/to/pharokka_db \
   --kraken2_db /path/to/kraken2_db \
   --outdir results
+
+# Same runs without containers, using module `conda` environments
+nextflow run main.nf -profile conda \
+  --input samplesheet.csv \
+  --references references.csv \
+  --kraken2_db /path/to/kraken2_db \
+  --outdir results
+
+# Optional: override the conda env cache location
+export NXF_CONDA_CACHEDIR=/path/to/conda-cache
 
 # Skip flags
 --skip_kraken    # Skip Kraken2/Bracken
@@ -80,6 +89,13 @@ name,fasta
 GCF_000008325,/path/to/reference1.fna
 GCF_029478315,/path/to/reference2.fna
 ```
+
+### Runtime profiles
+
+- `-profile docker` for Docker
+- `-profile singularity` for Singularity/Apptainer
+- `-profile conda` for local Conda environments from module definitions
+- `-profile test,<runtime>` for the bundled tiny test dataset, for example `-profile test,conda`
 
 ---
 

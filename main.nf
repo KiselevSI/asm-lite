@@ -5,11 +5,8 @@ nextflow.enable.dsl = 2
 if (!params.input) {
     error "ERROR: --input samplesheet.csv is required"
 }
-if (!(params.workflow in ['bacteria', 'phages'])) {
-    error "ERROR: --workflow must be 'bacteria' or 'phages', got: '${params.workflow}'"
-}
-if (params.workflow == 'phages' && !params.pharokka_db) {
-    error "ERROR: --pharokka_db is required for phages workflow"
+if (params.pharokka && !params.pharokka_db) {
+    error "ERROR: --pharokka_db is required when --pharokka is enabled"
 }
 
 include { ASMLITE } from './workflows/asmlite'
