@@ -2,6 +2,7 @@
 /.nextflow/
 /.nextflow.log*
 /results/
+/results2/
 /work/
 /data/
 /run.csv

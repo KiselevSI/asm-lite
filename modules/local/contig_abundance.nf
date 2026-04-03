@@ -29,25 +29,32 @@ process CONTIG_ABUNDANCE {
 
     samtools idxstats filt.bam > "${prefix}.idxstats.tsv"
 
-    total_all=\$(samtools view -c -F 0x900 "${bam}")
+    total_primary=\$(samtools view -c -F 0x900 "${bam}")
+    mapped_primary=\$(samtools view -c -F 0x904 "${bam}")
+    mapped_q10=\$(awk 'BEGIN{sum=0} \$1!="*" {sum+=\$3} END{print sum+0}' "${prefix}.idxstats.tsv")
 
-    awk -v TOTAL="\$total_all" 'BEGIN{
-        OFS="\\t";
-        print "Contig","Length","Reads","Percent_mapped","Percent_all_reads"
-      }
-      \$1!="*" {
-        c=\$1; L[c]=\$2; R[c]=\$3; SUM+=\$3
-      }
-      END{
-        for (c in R){
-          pm = (SUM   ? 100*R[c]/SUM   : 0);
-          pa = (TOTAL ? 100*R[c]/TOTAL : 0);
-          print c, L[c], R[c], sprintf("%.3f%%", pm), sprintf("%.3f%%", pa)
-        }
-        unmapped = (TOTAL - SUM); if (unmapped < 0) unmapped = 0
-        print "UNMAPPED", 0, unmapped, sprintf("%.3f%%", 0), sprintf("%.3f%%", (TOTAL ? 100*unmapped/TOTAL : 0))
-      }' "${prefix}.idxstats.tsv" \
-    | sort -k1,1 > "${prefix}.contig_abundance.tsv"
+    lowmapq_primary=\$((mapped_primary - mapped_q10))
+    unmapped_primary=\$((total_primary - mapped_primary))
+    if (( lowmapq_primary < 0 )); then lowmapq_primary=0; fi
+    if (( unmapped_primary < 0 )); then unmapped_primary=0; fi
+
+    {
+      printf "Contig\\tLength\\tReads_q10\\tPercent_mapped_q10\\tPercent_primary_reads\\n"
+      awk -v TOTAL="\$total_primary" -v SUM="\$mapped_q10" 'BEGIN{OFS="\\t"}
+        \$1!="*" {
+          pm = (SUM   ? 100*\$3/SUM   : 0);
+          pp = (TOTAL ? 100*\$3/TOTAL : 0);
+          print \$1, \$2, \$3, sprintf("%.3f%%", pm), sprintf("%.3f%%", pp)
+        }' "${prefix}.idxstats.tsv"
+      awk -v TOTAL="\$total_primary" -v COUNT="\$lowmapq_primary" 'BEGIN{
+          OFS="\\t";
+          printf "LOWMAPQ_PRIMARY\\t0\\t%d\\tNA\\t%.3f%%\\n", COUNT, (TOTAL ? 100*COUNT/TOTAL : 0)
+        }'
+      awk -v TOTAL="\$total_primary" -v COUNT="\$unmapped_primary" 'BEGIN{
+          OFS="\\t";
+          printf "UNMAPPED_PRIMARY\\t0\\t%d\\tNA\\t%.3f%%\\n", COUNT, (TOTAL ? 100*COUNT/TOTAL : 0)
+        }'
+    } > "${prefix}.contig_abundance.tsv"
 
     samtools coverage -A filt.bam > "${prefix}.coverage_per_contig.tsv" || true
 
