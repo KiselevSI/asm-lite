@@ -12,14 +12,17 @@ workflow CALL_VARIANTS {
 
     main:
 
+    ch_ref_by_sample = bam_bai_ref
+        .map { meta, bam, bai, fasta, fai ->
+            [meta.id, meta, fasta, fai]
+        }
+
     // 1. mpileup + call (combined in nf-core module)
     // BCFTOOLS_MPILEUP(tuple(meta, bam, intervals_mpileup, intervals_call), tuple(meta2, fasta, fai), save_mpileup)
     ch_mpileup_input = bam_bai_ref.map { meta, bam, bai, fasta, fai ->
         [meta, bam, [], []]  // no intervals
     }
-    ch_mpileup_ref = bam_bai_ref.map { meta, bam, bai, fasta, fai ->
-        [[id: meta.ref_name], fasta, fai]
-    }
+    ch_mpileup_ref = ch_ref_by_sample.map { sample_id, meta, fasta, fai -> [meta, fasta, fai] }
 
     BCFTOOLS_MPILEUP(ch_mpileup_input, ch_mpileup_ref, false)
 
@@ -27,12 +30,15 @@ workflow CALL_VARIANTS {
     // BCFTOOLS_NORM(tuple(meta, vcf, tbi), tuple(meta2, fasta))
     ch_norm_input = BCFTOOLS_MPILEUP.out.vcf
         .join(BCFTOOLS_MPILEUP.out.tbi)
-        .map { meta, vcf, tbi -> [meta, vcf, tbi] }
-    ch_norm_ref = bam_bai_ref.map { meta, bam, bai, fasta, fai ->
-        [[id: meta.ref_name], fasta]
-    }
+        .map { meta, vcf, tbi -> [meta.id, meta, vcf, tbi] }
+        .join(ch_ref_by_sample.map { sample_id, meta, fasta, fai -> [sample_id, fasta] }, by: 0)
+        .map { sample_id, meta, vcf, tbi, fasta -> [meta, vcf, tbi, fasta] }
+    ch_norm_ref = ch_norm_input.map { meta, vcf, tbi, fasta -> [meta, fasta] }
 
-    BCFTOOLS_NORM(ch_norm_input, ch_norm_ref)
+    BCFTOOLS_NORM(
+        ch_norm_input.map { meta, vcf, tbi, fasta -> [meta, vcf, tbi] },
+        ch_norm_ref
+    )
 
     // 3. view (filter: QUAL>=20 && FMT/DP>=10 via ext.args in modules.config)
     // BCFTOOLS_VIEW(tuple(meta, vcf, index), regions, targets, samples)
@@ -47,7 +53,14 @@ workflow CALL_VARIANTS {
     ch_stats_input = BCFTOOLS_VIEW.out.vcf
         .join(BCFTOOLS_INDEX.out.csi)
         .map { meta, vcf, csi -> [meta, vcf, csi] }
-    BCFTOOLS_STATS(ch_stats_input, [[],[]], [[],[]], [[],[]], [[],[]], [[],[]])
+    ch_stats_ref = ch_ref_by_sample
+        .map { sample_id, meta, fasta, fai -> [sample_id, fasta] }
+        .combine(
+            ch_stats_input.map { meta, vcf, csi -> [meta.id, meta, vcf, csi] },
+            by: 0
+        )
+        .map { sample_id, fasta, meta, vcf, csi -> [meta, fasta] }
+    BCFTOOLS_STATS(ch_stats_input, [[],[]], [[],[]], [[],[]], [[],[]], ch_stats_ref)
 
     emit:
     vcf      = BCFTOOLS_VIEW.out.vcf       // tuple(meta, vcf.gz)
