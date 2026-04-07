@@ -8,18 +8,30 @@ include { PICARD_MARKDUPLICATES                 } from '../../modules/nf-core/pi
 
 workflow MAPPING {
     take:
-    reads       // tuple(meta, [fastq_1, fastq_2])
-    references  // path to references.csv
+    reads       // tuple(meta[+reference,+ref_name], [fastq_1, fastq_2])
 
     main:
 
-    // Parse references CSV
-    ch_refs = channel
-        .fromPath(references)
-        .splitCsv(header: true, sep: ',')
-        .map { row ->
-            def ref_meta = [id: row.name]
-            [ref_meta, file(row.fasta, checkIfExists: true)]
+    ch_reads_by_ref = reads
+        .map { meta, reads_files ->
+            if (!meta.reference) {
+                error "ERROR: sample '${meta.id}' does not have a reference in --input. Add column 'reference' or use --skip_variants."
+            }
+            [meta.reference, meta, reads_files]
+        }
+
+    // Unique reference FASTA files declared in the samplesheet
+    ch_refs = reads
+        .map { meta, reads_files ->
+            if (!meta.reference) {
+                error "ERROR: sample '${meta.id}' does not have a reference in --input. Add column 'reference' or use --skip_variants."
+            }
+            [meta.reference, meta.ref_name]
+        }
+        .unique()
+        .map { ref_path, ref_name ->
+            def ref_meta = [id: ref_name, ref_key: ref_path]
+            [ref_meta, file(ref_path, checkIfExists: true)]
         }
 
     // Index each reference
@@ -29,24 +41,23 @@ workflow MAPPING {
     ch_faidx_input = ch_refs.map { ref_meta, fasta -> [ref_meta, fasta, []] }
     SAMTOOLS_FAIDX(ch_faidx_input, false)
 
-    // Combine: each sample x each reference
-    ch_reads_x_refs = reads
-        .combine(ch_refs)
-        .map { meta, reads_files, ref_meta, ref_fasta ->
-            def new_meta = meta + [ref_name: ref_meta.id]
-            [new_meta, reads_files, ref_meta, ref_fasta]
-        }
-
-    // Join with BWA index by ref_meta.id
-    ch_for_bwa = ch_reads_x_refs
-        .map { meta, reads_files, ref_meta, ref_fasta ->
-            [ref_meta.id, meta, reads_files, ref_meta, ref_fasta]
-        }
+    ch_ref_resources = ch_refs
+        .map { ref_meta, fasta -> [ref_meta.ref_key, ref_meta, fasta] }
         .combine(
-            BWA_INDEX_REF.out.index.map { ref_meta, index -> [ref_meta.id, index] },
+            BWA_INDEX_REF.out.index.map { ref_meta, index -> [ref_meta.ref_key, index] },
             by: 0
         )
-        .map { ref_id, meta, reads_files, ref_meta, ref_fasta, index ->
+        .combine(
+            SAMTOOLS_FAIDX.out.fai.map { ref_meta, fai -> [ref_meta.ref_key, fai] },
+            by: 0
+        )
+        .map { ref_key, ref_meta, fasta, index, fai ->
+            [ref_key, ref_meta, fasta, index, fai]
+        }
+
+    ch_for_bwa = ch_reads_by_ref
+        .combine(ch_ref_resources, by: 0)
+        .map { ref_key, meta, reads_files, ref_meta, ref_fasta, index, fai ->
             [meta, reads_files, ref_meta, index, ref_fasta]
         }
 
@@ -58,15 +69,13 @@ workflow MAPPING {
     )
 
     // Mark duplicates
-    // Get fai from SAMTOOLS_FAIDX
-    ch_ref_fasta_fai = ch_refs
-        .join(SAMTOOLS_FAIDX.out.fai)
-        .map { ref_meta, fasta, fai -> [ref_meta.id, ref_meta, fasta, fai] }
+    ch_ref_fasta_fai = ch_ref_resources
+        .map { ref_key, ref_meta, fasta, index, fai -> [ref_key, ref_meta, fasta, fai] }
 
     ch_dedup_with_ref = BWA_MEM_REF.out.bam
-        .map { meta, bam -> [meta.ref_name, meta, bam] }
+        .map { meta, bam -> [meta.reference, meta, bam] }
         .combine(ch_ref_fasta_fai, by: 0)
-        .map { ref_id, meta, bam, ref_meta, fasta, fai ->
+        .map { ref_key, meta, bam, ref_meta, fasta, fai ->
             [meta, bam, ref_meta, fasta, fai]
         }
 
@@ -85,10 +94,9 @@ workflow MAPPING {
 
     // BAM + BAI + ref fasta + fai for variant calling
     ch_bam_bai_ref = ch_bam_bai
-        .map { meta, bam, bai -> [meta.ref_name, meta, bam, bai] }
-        .combine(ch_refs.map { ref_meta, fasta -> [ref_meta.id, fasta] }, by: 0)
-        .combine(SAMTOOLS_FAIDX.out.fai.map { ref_meta, fai -> [ref_meta.id, fai] }, by: 0)
-        .map { ref_id, meta, bam, bai, fasta, fai -> [meta, bam, bai, fasta, fai] }
+        .map { meta, bam, bai -> [meta.reference, meta, bam, bai] }
+        .combine(ch_ref_fasta_fai, by: 0)
+        .map { ref_key, meta, bam, bai, ref_meta, fasta, fai -> [meta, bam, bai, fasta, fai] }
 
     emit:
     bam_bai     = ch_bam_bai        // tuple(meta[+ref_name], bam, bai)

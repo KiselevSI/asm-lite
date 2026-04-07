@@ -34,8 +34,8 @@ nf-core-asmlite/
 ├── assets/
 │   └── multiqc_config.yml
 ├── tests/
-│   ├── samplesheet.csv
-│   └── references.csv
+│   ├── samplesheet.csv              # Test samplesheet with per-sample reference FASTA
+│   └── references.csv               # Legacy fixture, no longer used for per-sample mapping
 └── modules.json                     # nf-core module versions tracking
 ```
 
@@ -45,14 +45,12 @@ nf-core-asmlite/
 # Bacteria or other non-phage assemblies (Prokka annotation by default)
 nextflow run main.nf -profile docker \
   --input samplesheet.csv \
-  --references references.csv \
   --kraken2_db /path/to/kraken2_db \
   --outdir results
 
 # Phages (switch annotation to Pharokka)
 nextflow run main.nf -profile docker \
   --input samplesheet.csv \
-  --references references.csv \
   --pharokka \
   --pharokka_db /path/to/pharokka_db \
   --kraken2_db /path/to/kraken2_db \
@@ -61,7 +59,6 @@ nextflow run main.nf -profile docker \
 # Same runs without containers, using module `conda` environments
 nextflow run main.nf -profile conda \
   --input samplesheet.csv \
-  --references references.csv \
   --kraken2_db /path/to/kraken2_db \
   --outdir results
 
@@ -77,17 +74,21 @@ export NXF_CONDA_CACHEDIR=/path/to/conda-cache
 ### Samplesheet format (`--input`)
 
 ```csv
-sample,fastq_1,fastq_2
-Sample1,/path/to/R1.fastq.gz,/path/to/R2.fastq.gz
-Sample2,/path/to/R1.fastq.gz,/path/to/R2.fastq.gz
+sample,fastq_1,fastq_2,reference
+Sample1,/path/to/R1.fastq.gz,/path/to/R2.fastq.gz,/path/to/reference1.fna
+Sample2,/path/to/R1.fastq.gz,/path/to/R2.fastq.gz,/path/to/reference2.fna
 ```
 
-### References format (`--references`)
+`reference` is required when variant calling is enabled. To skip reference mapping and VCF calling, use `--skip_variants`.
+The old `--references` parameter is now deprecated and ignored if passed.
 
-```csv
-name,fasta
-GCF_000008325,/path/to/reference1.fna
-GCF_029478315,/path/to/reference2.fna
+### Example with your local files
+
+```bash
+nextflow run main.nf -profile conda \
+  --input /home/zerg/git/nf-core-asmlite/run.csv \
+  --kraken2_db /path/to/kraken2_db \
+  --outdir results
 ```
 
 ### Runtime profiles
@@ -125,7 +126,7 @@ GCF_029478315,/path/to/reference2.fna
 | Phage: Kraken2/Bracken | Нет | Да |
 | Phage: Variant calling | Нет | Да |
 | CONTIG_ABUNDANCE | Только bacteria | Оба workflow |
-| References | Захардкожены в config (r1, r2, r3, r4) | CSV файл (`--references`) — любое количество |
+| References | Захардкожены в config (r1, r2, r3, r4) | Указываются в `--input` через колонку `reference` |
 | Skip flags | Нет | `--skip_kraken`, `--skip_variants`, `--skip_qc` |
 | MultiQC | Минимальный | Собирает fastp, fastqc, picard, samtools, quast, bcftools |
 

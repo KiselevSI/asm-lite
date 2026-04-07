@@ -1,2 +1,2 @@
-sample,fastq_1,fastq_2
-test_sample,tests/data/test_sample_R1.fastq.gz,tests/data/test_sample_R2.fastq.gz
+sample,fastq_1,fastq_2,reference
+test_sample,tests/data/test_sample_R1.fastq.gz,tests/data/test_sample_R2.fastq.gz,tests/data/test_ref.fna

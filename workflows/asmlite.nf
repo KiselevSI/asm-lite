@@ -75,9 +75,12 @@ workflow ASMLITE {
         }
     }
 
-    // 8. Map to references + variant calling
-    if (!params.skip_variants && params.references) {
-        MAPPING(ch_trimmed, params.references)
+    // 8. Map to per-sample references + variant calling
+    if (!params.skip_variants) {
+        if (params.references) {
+            log.warn "Ignoring deprecated --references value. Reference FASTA paths are now read from the 'reference' column in --input."
+        }
+        MAPPING(ch_trimmed)
 
         CALL_VARIANTS(MAPPING.out.bam_bai_ref)
         ch_multiqc = ch_multiqc.mix(CALL_VARIANTS.out.stats.map { meta, f -> f })
