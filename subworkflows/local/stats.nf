@@ -14,30 +14,49 @@ workflow STATS {
     assembly    // tuple(meta, fasta)     — assembly
 
     main:
+    ch_bam_by_sample = bam_bai
+        .map { meta, bam, bai -> [meta.id, meta, bam, bai] }
+
+    ch_assembly_by_sample = assembly
+        .map { meta, fasta -> [meta.id, meta, fasta] }
+
     // Create faidx for assembly (needed by picard and samtools)
     ch_faidx_input = assembly.map { meta, fasta -> [meta, fasta, []] }
     SAMTOOLS_FAIDX_ASM(ch_faidx_input, false)
+    ch_fai_by_sample = SAMTOOLS_FAIDX_ASM.out.fai
+        .map { meta, fai -> [meta.id, meta, fai] }
+
+    ch_assembly_with_fai = ch_assembly_by_sample
+        .join(ch_fai_by_sample, by: 0)
+        .map { sample_id, meta, fasta, fai_meta, fai -> [sample_id, meta, fasta, fai] }
+
+    ch_bam_assembly = ch_bam_by_sample
+        .join(ch_assembly_by_sample, by: 0)
+        .map { sample_id, meta, bam, bai, asm_meta, fasta -> [meta, bam, bai, fasta] }
+
+    ch_bam_assembly_fai = ch_bam_by_sample
+        .join(ch_assembly_with_fai, by: 0)
+        .map { sample_id, meta, bam, bai, asm_meta, fasta, fai -> [meta, bam, bai, fasta, fai] }
 
     // picard collectwgsmetrics: tuple(meta, bam, bai), tuple(meta2, fasta), tuple(meta3, fai), intervallist
     PICARD_COLLECTWGSMETRICS(
-        bam_bai,
-        assembly,
-        SAMTOOLS_FAIDX_ASM.out.fai,
+        ch_bam_assembly_fai.map { meta, bam, bai, fasta, fai -> [meta, bam, bai] },
+        ch_bam_assembly_fai.map { meta, bam, bai, fasta, fai -> [meta, fasta] },
+        ch_bam_assembly_fai.map { meta, bam, bai, fasta, fai -> [meta, fai] },
         []
     )
 
     // picard collectalignmentsummarymetrics: tuple(meta, bam), tuple(meta2, fasta)
     PICARD_COLLECTALIGNMENTSUMMARYMETRICS(
-        bam_bai.map { meta, bam, bai -> [meta, bam] },
-        assembly
+        ch_bam_assembly.map { meta, bam, bai, fasta -> [meta, bam] },
+        ch_bam_assembly.map { meta, bam, bai, fasta -> [meta, fasta] }
     )
 
     // samtools stats: tuple(meta, input, input_index), tuple(meta2, fasta, fai)
-    ch_fasta_fai = assembly
-        .join(SAMTOOLS_FAIDX_ASM.out.fai)
-        .map { meta, fasta, fai -> [meta, fasta, fai] }
-
-    SAMTOOLS_STATS(bam_bai, ch_fasta_fai)
+    SAMTOOLS_STATS(
+        ch_bam_assembly_fai.map { meta, bam, bai, fasta, fai -> [meta, bam, bai] },
+        ch_bam_assembly_fai.map { meta, bam, bai, fasta, fai -> [meta, fasta, fai] }
+    )
 
     // samtools flagstat: tuple(meta, bam, bai)
     SAMTOOLS_FLAGSTAT(bam_bai)
